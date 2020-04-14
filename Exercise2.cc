@@ -8,7 +8,30 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("Exercise2");
 
+NetDeviceContainer CreateNetDeviceContainer(NodeContainer nodes, std::string dataRate, std::string delay) {
+    PointToPointHelper *pointToPoint_p =  new PointToPointHelper;
+    pointToPoint_p->SetDeviceAttribute("DataRate", StringValue(dataRate));
+    pointToPoint_p->SetChannelAttribute("Delay", StringValue(delay));
+    return pointToPoint_p->Install(nodes);
+}
 
+Ipv4InterfaceContainer CreateIpv4InterfaceContainer(NetDeviceContainer devices, Ipv4Address network, Ipv4Mask mask) {
+    Ipv4AddressHelper *address_p = new Ipv4AddressHelper;
+    address_p->SetBase(network, mask);
+    return address_p->Assign(devices);
+}
+
+UdpEchoClientHelper* CreateUdpEchoClientHelper(Address destIp, uint16_t port, uint64_t maxPackets, uint64_t packetSize, Time interval) {
+    UdpEchoClientHelper *echoClient_p = new UdpEchoClientHelper(destIp, port);
+    echoClient_p->SetAttribute("MaxPackets", UintegerValue(maxPackets));
+    echoClient_p->SetAttribute("PacketSize", UintegerValue(packetSize));
+    echoClient_p->SetAttribute("Interval", TimeValue(interval));
+    return echoClient_p;
+}
+
+UdpEchoServerHelper* CreateUdpEchoServerHelper(uint16_t port) {
+    return new UdpEchoServerHelper(port);
+}
 
 int main(int argc, char *argv[]) {
     LogComponentEnable("Exercise2", LOG_LEVEL_INFO);
@@ -20,76 +43,32 @@ int main(int argc, char *argv[]) {
 
     NodeContainer nodes;
     nodes.Create(3);
+    NodeContainer nodesA(nodes.Get(0), nodes.Get(1));
+    NodeContainer nodesB(nodes.Get(1), nodes.Get(2));
 
-    NodeContainer nodesA;
-    nodesA.Add(nodes.Get(0));
-    nodesA.Add(nodes.Get(1));
-
-    NodeContainer nodesB;
-    nodesB.Add(nodes.Get(1));
-    nodesB.Add(nodes.Get(2));
-
-    PointToPointHelper pointToPointA;
-    pointToPointA.SetDeviceAttribute("DataRate", StringValue("10Mbps"));
-    pointToPointA.SetChannelAttribute("Delay", StringValue("5ms"));
-
-    PointToPointHelper pointToPointB;
-    pointToPointB.SetDeviceAttribute("DataRate", StringValue("0.1Mbps"));
-    pointToPointB.SetChannelAttribute("Delay", StringValue("10ms"));
-
-    NetDeviceContainer devicesA;
-    devicesA = pointToPointA.Install(nodesA);
-
-    NetDeviceContainer devicesB;
-    devicesB = pointToPointA.Install(nodesB);
+    NetDeviceContainer devicesA = CreateNetDeviceContainer(nodesA, "10Mbps", "5ms");
+    NetDeviceContainer devicesB = CreateNetDeviceContainer(nodesB, "0.1Mbps", "10ms");
 
     InternetStackHelper stack;
     stack.Install(nodes);
 
-    Ipv4AddressHelper addressA;
-    addressA.SetBase("10.1.1.0", "255.255.255.0");
-    Ipv4InterfaceContainer interfacesA = addressA.Assign(devicesA);
-
-    Ipv4AddressHelper addressB;
-    addressB.SetBase("10.1.2.0", "255.255.255.0");
-    Ipv4InterfaceContainer interfacesB = addressB.Assign(devicesB);
+    Ipv4InterfaceContainer interfacesA = CreateIpv4InterfaceContainer(devicesA, "10.1.1.0", "255.255.255.0");
+    Ipv4InterfaceContainer interfacesB = CreateIpv4InterfaceContainer(devicesB, "10.1.2.0", "255.255.255.0");
 
     // Create Applications
     NS_LOG_INFO("Creating Applications...");
 
-    UdpEchoClientHelper echoClientA(interfacesA.GetAddress(1), 9);
-    echoClientA.SetAttribute("MaxPackets", UintegerValue(1500));
-    echoClientA.SetAttribute("Interval", TimeValue(MilliSeconds(1)));
-    echoClientA.SetAttribute("PacketSize", UintegerValue(1050));
+    ApplicationContainer clientApps;
+    clientApps.Add(CreateUdpEchoClientHelper(interfacesA.GetAddress(1), 9, 1500, 1050, MilliSeconds(1))->Install(nodesA.Get(0)));
+    clientApps.Add(CreateUdpEchoClientHelper(interfacesB.GetAddress(1), 9, 1500, 1050, MilliSeconds(10))->Install(nodesB.Get(0)));
+    clientApps.Start(Seconds(2));
+    clientApps.Stop(Seconds(4));
 
-    UdpEchoClientHelper echoClientB(interfacesB.GetAddress(1), 9);
-    echoClientB.SetAttribute("MaxPackets", UintegerValue(1500));
-    echoClientB.SetAttribute("Interval", TimeValue(MilliSeconds(10)));
-    echoClientB.SetAttribute("PacketSize", UintegerValue(1050));
-
-    ApplicationContainer clientAppsA;
-    clientAppsA.Add(echoClientA.Install(nodesA.Get(0)));
-    clientAppsA.Start(Seconds(2));
-    clientAppsA.Stop(Seconds(4));
-
-    ApplicationContainer clientAppsB;
-    clientAppsB.Add(echoClientB.Install(nodesB.Get(0)));
-    clientAppsB.Start(Seconds(2));
-    clientAppsB.Stop(Seconds(4));
-
-    UdpEchoServerHelper echoServerA(9);
-
-    UdpEchoServerHelper echoServerB(9);
-
-    ApplicationContainer serverAppsA;
-    serverAppsA.Add(echoServerA.Install(nodesA.Get(1)));
-    serverAppsA.Start(Seconds(1));
-    serverAppsA.Stop(Seconds(5));
-
-    ApplicationContainer serverAppsB;
-    serverAppsB.Add(echoServerB.Install(nodesB.Get(1)));
-    serverAppsB.Start(Seconds(1));
-    serverAppsB.Stop(Seconds(5));
+    ApplicationContainer serverApps;
+    serverApps.Add(CreateUdpEchoServerHelper(9)->Install(nodesA.Get(1)));
+    serverApps.Add(CreateUdpEchoServerHelper(9)->Install(nodesB.Get(1)));
+    serverApps.Start(Seconds(1));
+    serverApps.Stop(Seconds(5));
 
     // Run Simulator
     NS_LOG_INFO("Running Simulator...");
