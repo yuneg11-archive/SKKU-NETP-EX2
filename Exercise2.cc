@@ -60,23 +60,25 @@ int main(int argc, char *argv[]) {
 
     ApplicationContainer clientApps;
     clientApps.Add(CreateUdpEchoClientHelper(interfacesA.GetAddress(1), 9, 1500, 1050, MilliSeconds(1))->Install(nodesA.Get(0)));
-    clientApps.Add(CreateUdpEchoClientHelper(interfacesB.GetAddress(1), 9, 1500, 1050, MilliSeconds(10))->Install(nodesB.Get(0)));
+    clientApps.Add(CreateUdpEchoClientHelper(interfacesB.GetAddress(0), 99, 1500, 1050, MilliSeconds(10))->Install(nodesB.Get(1)));
     clientApps.Start(Seconds(2));
     clientApps.Stop(Seconds(4));
 
     ApplicationContainer serverApps;
     serverApps.Add(CreateUdpEchoServerHelper(9)->Install(nodesA.Get(1)));
-    serverApps.Add(CreateUdpEchoServerHelper(9)->Install(nodesB.Get(1)));
+    serverApps.Add(CreateUdpEchoServerHelper(99)->Install(nodesB.Get(0)));
     serverApps.Start(Seconds(1));
     serverApps.Stop(Seconds(5));
 
     // Run Simulator
     NS_LOG_INFO("Running Simulator...");
+
     Simulator::Run();
     Simulator::Stop(Seconds(5));
 
     // Destory Simulator
     NS_LOG_INFO("Destroying Simulator...");
+
     Simulator::Destroy();
 
     return 0;
